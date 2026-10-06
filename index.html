@@ -259,7 +259,7 @@ async function loadConfig(id) {
     try {
       const [cfg, sd] = await Promise.all([fs.getDoc(fs.doc(db, "settings", "main")), fs.getDoc(fs.doc(db, "students", id))]);
       if (cfg.exists()) { const c = cfg.data(); ["xpPerReward", "timerMinutes", "videoMinutes"].forEach(k => { if (c[k] > 0) SET[k] = c[k]; }); }
-      if (sd.exists()) { const d = sd.data(); st = { name: d.name || "Student", xp: +d.xp || 0, rewards: Array.isArray(d.rewards) && d.rewards.length ? d.rewards : ["timer"],
+      if (sd.exists()) { const d = sd.data(); st = { name: d.name || "Student", xp: +d.xp || 0, xpPerReward: +d.xpPerReward > 0 ? +d.xpPerReward : 0, rewards: Array.isArray(d.rewards) && d.rewards.length ? d.rewards : ["timer"],
                                                  videos: Array.isArray(d.videos) ? d.videos.filter(v => v && v.url) : [] }; }
     } catch (e) { console.warn("Could not load settings from Firebase; using the file's values.", e); }
   }
@@ -337,6 +337,7 @@ async function teacherPage() {
     function studentPanel(st) {
       const name = el("input", { className: "in wide", type: "text", value: st.name || "", ariaLabel: "Student name" });
       const xp = el("input", { className: "in num", type: "number", min: 0, value: st.xp || 0 });
+      const need = el("input", { className: "in num", type: "number", min: 1, value: st.xpPerReward > 0 ? st.xpPerReward : "", placeholder: String(cfg.xpPerReward) });
       const cT = el("input", { type: "checkbox", checked: (st.rewards || ["timer"]).includes("timer") });
       const cV = el("input", { type: "checkbox", checked: (st.rewards || []).includes("video") });
       const vids = el("textarea", { className: "in wide", rows: 4, placeholder: "Title | link\nTitle | link",
@@ -356,7 +357,7 @@ async function teacherPage() {
         const videos = parseVids(vids.value);
         const bad = videos.find(v => !/youtu|\.mp4/i.test(v.url));
         if (bad) return say("Couldn't read \"" + bad.title + "\". Use a YouTube link or a link ending in .mp4.", true);
-        try { await fs.setDoc(fs.doc(db, "students", st.id), { name: name.value.trim(), xp: Math.max(0, +xp.value || 0), rewards, videos }); say(name.value.trim() + " saved."); }
+        try { await fs.setDoc(fs.doc(db, "students", st.id), { name: name.value.trim(), xp: Math.max(0, +xp.value || 0), rewards, videos, ...(+need.value > 0 ? { xpPerReward: Math.floor(+need.value) } : {}) }); say(name.value.trim() + " saved."); }
         catch (e) { say("Couldn't save.", true); }
       };
       copy.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(studentLink(st.id)); copy.textContent = "Copied!"; setTimeout(() => copy.textContent = "Copy link", 1500); };
@@ -372,6 +373,7 @@ async function teacherPage() {
       };
       return el("div", { className: "panel" },
         name, el("label", { className: "field", style: "margin-top:10px" }, "XP total", xp),
+        el("label", { className: "field" }, "XP needed per reward (empty = class setting)", need),
         el("div", { className: "checks" }, el("label", {}, cT, "Timer"), el("label", {}, cV, "Video")),
         el("label", { textContent: "This student's videos (one per line, as Title | link). Leave empty to use the shared list.", style: "display:block;font-weight:500;margin:8px 0 6px" }), vids,
         el("div", { className: "row-actions" }, save, copy, reset, del));
@@ -408,7 +410,7 @@ if (params.has("teacher")) {
 }
 
 async function run(st) {
-  const XP = SET.xpPerReward, MIN = SET.timerMinutes;
+  const XP = st.xpPerReward > 0 ? st.xpPerReward : SET.xpPerReward, MIN = SET.timerMinutes;
   const videos = (st.videos && st.videos.length ? st.videos : VIDEOS).filter(v => parseVideo(v.url));
   const rewards = st.rewards.filter(r => r === "timer" || (r === "video" && videos.length));
   if (!rewards.length) rewards.push("timer");
