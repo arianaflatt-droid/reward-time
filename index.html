@@ -128,6 +128,7 @@
     <h1 id="watchTitle"></h1>
     <div class="player" id="player"></div>
     <div class="vtime" id="vtime" role="timer" aria-live="off"></div>
+    <p class="hint hidden" id="vfallback" style="margin-bottom:14px"><a id="vlink" target="_blank" rel="noopener">Video not showing? Open it in a new tab.</a></p>
     <button class="btn go" id="watchDone">I'm done watching</button>
   </section>
 
@@ -356,8 +357,8 @@ async function teacherPage() {
         if (!name.value.trim()) return say("Add a name first.", true);
         if (!rewards.length) return say("Pick at least one reward type.", true);
         const videos = parseVids(vids.value);
-        const bad = videos.find(v => !/youtu|\.mp4/i.test(v.url));
-        if (bad) return say("Couldn't read \"" + bad.title + "\". Use a YouTube link or a link ending in .mp4.", true);
+        const bad = videos.find(v => !/youtu|\.mp4|^https:\/\//i.test(v.url));
+        if (bad) return say("Couldn't read \"" + bad.title + "\". Use a link starting with https:// or one ending in .mp4.", true);
         try { await fs.setDoc(fs.doc(db, "students", st.id), { name: name.value.trim(), xp: Math.max(0, +xp.value || 0), rewards, videos, ...(+need.value > 0 ? { xpPerReward: Math.floor(+need.value) } : {}), ...(+vmin.value > 0 ? { videoMinutes: +vmin.value } : {}) }); say(name.value.trim() + " saved."); }
         catch (e) { say("Couldn't save.", true); }
       };
@@ -482,7 +483,9 @@ async function run(st) {
     if (!url) return null;
     if (/\.mp4(\?.*)?$/i.test(url)) return { type: "file", src: url };
     const m = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
-    return m ? { type: "yt", id: m[1] } : null;
+    if (m) return { type: "yt", id: m[1] };
+    if (/^https:\/\//i.test(url)) return { type: "page", src: url };   // SafeTube or other safe-video page
+    return null;
   }
   const mmss = sec => { sec = Math.floor(sec); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); };
   const vkey = url => {
@@ -518,7 +521,8 @@ async function run(st) {
 
     function cleanup() {
       over = true; clearInterval(loop);
-      if (!ended && !(saved.done && lastPos === startAt)) saveProg(v.url, { pos: lastPos, done: false }, true);
+      $("vfallback").classList.add("hidden");
+      if (info.type !== "page" && !ended && !(saved.done && lastPos === startAt)) saveProg(v.url, { pos: lastPos, done: false }, true);
       try { adapter && adapter.pause(); adapter && adapter.destroy(); } catch (e) {}
       box.innerHTML = "";
     }
@@ -547,6 +551,12 @@ async function run(st) {
           }
         });
       });
+    } else if (info.type === "page") {
+      const f = document.createElement("iframe");
+      f.src = info.src; f.title = v.title; f.allow = "autoplay; fullscreen; encrypted-media"; f.allowFullscreen = true;
+      box.replaceChildren(f);
+      $("vlink").href = info.src; $("vfallback").classList.remove("hidden");
+      adapter = { time: () => 0, playing: () => true, pause: () => {}, destroy: () => {} };
     } else {
       const el = document.createElement("video");
       el.src = info.src; el.controls = true; el.playsInline = true; box.replaceChildren(el);
@@ -558,8 +568,15 @@ async function run(st) {
     if (over) return;   // she tapped "done" while the player was loading
 
     last = Date.now();
+    const endAt = Date.now() + budget * 1000;
     loop = setInterval(() => {
       if (over) return;
+      if (info.type === "page") {   // can't see play/pause inside the page, so time simply runs
+        budget = (endAt - Date.now()) / 1000;
+        $("vtime").textContent = "Video time left: " + mmss(Math.max(0, budget));
+        if (budget <= 0) endWith("Time's up! Earn " + toNext + " more XP to watch more!");
+        return;
+      }
       const now = Date.now(), dt = Math.min((now - last) / 1000, 1.5); last = now;
       if (ended) {
         saveProg(v.url, { pos: 0, done: true }, true);
