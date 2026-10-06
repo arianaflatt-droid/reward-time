@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reward Time</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --board:#1f6f6b; --board-dot:#185a57; --paper:#fff8e7; --ink:#2b2433;
+          --thread:#ef476f; --thread-2:#ffb703; --thread-3:#4cc9f0; --ok:#2a9d5c; }
+  * { box-sizing:border-box; }
+  html,body { min-height:100%; margin:0; }
+  body { font-family:"Fredoka","Trebuchet MS",system-ui,sans-serif; color:var(--ink);
+    background-color:var(--board); background-image:radial-gradient(var(--board-dot) 3px,transparent 3.5px);
+    background-size:28px 28px; display:flex; align-items:center; justify-content:center; padding:28px 20px; min-height:100vh; }
+  .card { position:relative; width:100%; max-width:460px; background:var(--paper); border-radius:14px;
+    padding:40px 28px 30px; box-shadow:0 10px 0 rgba(0,0,0,.18); text-align:center; transform:rotate(-.6deg); }
+  .card::before,.card::after { content:""; position:absolute; top:-14px; width:96px; height:28px; opacity:.92; }
+  .card::before { left:22px; transform:rotate(-8deg); background:repeating-linear-gradient(45deg,var(--thread-2) 0 8px,#ffd666 8px 16px); }
+  .card::after { right:22px; transform:rotate(7deg); background:repeating-linear-gradient(45deg,var(--thread-3) 0 8px,#9be3f8 8px 16px); }
+  h1 { margin:0 0 4px; font-size:1.8rem; font-weight:700; line-height:1.15; }
+  .sub { margin:0 0 20px; font-size:1.05rem; color:#5d5468; }
+  .hidden { display:none !important; }
+
+  .lock-icon { width:84px; height:84px; margin:0 auto 6px; display:block; }
+  .badge { display:inline-block; background:var(--ok); color:#fff; font-weight:600; padding:6px 16px;
+    border-radius:999px; margin-bottom:14px; font-size:.95rem; }
+  .badge.none { background:#8d8499; }
+
+  #progress { margin-top:22px; }
+  .xp-line { font-size:1.2rem; font-weight:600; margin:0 0 10px; }
+  .stitches { position:relative; height:18px; margin:0 6px 10px; }
+  .stitches .track,.stitches .fill { position:absolute; left:0; top:7px; height:0; border-top:5px dashed; }
+  .stitches .track { width:100%; border-color:#d8cfe0; }
+  .stitches .fill { width:0; border-color:var(--thread); transition:width .8s ease; }
+  .stitches .needle { position:absolute; top:-3px; left:0; font-size:22px; line-height:1; transform:translateX(-50%); transition:left .8s ease; }
+  .hint { font-size:1rem; color:#5d5468; margin:0; }
+
+  .btn { font:inherit; font-weight:700; font-size:1.15rem; padding:12px 22px; min-height:52px;
+    border:3px solid var(--ink); border-radius:14px; cursor:pointer; color:var(--ink); background:#fff;
+    box-shadow:0 4px 0 var(--ink); transition:transform .08s,box-shadow .08s; }
+  .btn:active:not(:disabled) { transform:translateY(4px); box-shadow:0 0 0 var(--ink); }
+  .btn.go { background:var(--thread-2); width:100%; }
+  .btn.link { border:none; box-shadow:none; background:none; text-decoration:underline; font-size:1rem; min-height:44px; font-weight:500; }
+  .stack { display:flex; flex-direction:column; gap:14px; }
+  .pick { display:flex; align-items:center; gap:14px; text-align:left; width:100%; }
+  .pick .ico { font-size:2rem; }
+  .pick small { display:block; font-weight:500; font-size:.9rem; color:#5d5468; }
+  .pick.timer { background:var(--thread-2); } .pick.video { background:var(--thread-3); }
+  :focus-visible { outline:4px solid #7b2cbf; outline-offset:3px; }
+
+  .vcard { display:block; width:100%; text-align:left; font:inherit; font-weight:600; font-size:1.05rem;
+    background:#fff; border:3px solid var(--ink); border-radius:12px; padding:14px 16px; cursor:pointer; color:var(--ink); }
+  .vcard:hover { background:#e9f8fd; }
+  .player { position:relative; width:100%; aspect-ratio:16/9; background:#000; border-radius:10px; overflow:hidden; margin-bottom:16px; }
+  .player iframe,.player video { position:absolute; inset:0; width:100%; height:100%; border:0; }
+
+  .vtime { font-size:1.15rem; font-weight:600; margin:0 0 16px; min-height:1.5em; }
+  .dial { position:relative; width:240px; height:240px; margin:0 auto 16px; }
+  .dial svg { width:100%; height:100%; transform:rotate(-90deg); }
+  .dial .bg { fill:none; stroke:#eadfcb; stroke-width:18; }
+  .dial .thread { fill:none; stroke:var(--thread); stroke-width:18; stroke-linecap:round; transition:stroke-dashoffset .25s linear,stroke .3s; }
+  .dial .time { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .digits { font-size:3.3rem; font-weight:700; font-variant-numeric:tabular-nums; line-height:1; }
+  .state { font-size:1rem; color:#5d5468; margin-top:6px; }
+  .done .digits { color:var(--ok); } .done .thread { stroke:var(--ok); }
+
+  .teacher-row { display:flex; gap:8px; align-items:center; text-align:left; margin-bottom:10px; font-weight:600; }
+  .teacher-row span { flex:1; }
+  .teacher-row .btn { font-size:.95rem; min-height:44px; padding:8px 14px; }
+
+  .card.wide { max-width:660px; transform:none; }
+  #s-teacher { text-align:left; } #s-teacher h1,#s-teacher .sub { text-align:center; }
+  .field { display:flex; justify-content:space-between; align-items:center; gap:10px; font-weight:600; margin-bottom:10px; }
+  .in { font:inherit; padding:10px 12px; border:3px solid var(--ink); border-radius:10px; background:#fff; color:var(--ink); min-height:46px; }
+  .in.num { width:96px; text-align:center; } .in.wide { width:100%; }
+  .panel { border:3px solid var(--ink); border-radius:12px; padding:14px; margin-bottom:14px; background:#fffdf5; }
+  .panel h2 { margin:0 0 10px; font-size:1.2rem; }
+  .row-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .row-actions .btn { font-size:.95rem; min-height:44px; padding:8px 14px; box-shadow:0 3px 0 var(--ink); }
+  .checks { display:flex; gap:16px; font-weight:500; margin:6px 0; }
+  .checks input { width:20px; height:20px; margin-right:6px; vertical-align:middle; }
+  .flash { min-height:1.4em; text-align:center; font-weight:600; color:var(--ok); margin:0 0 10px; }
+  .flash.err { color:#c1121f; }
+  @media (prefers-reduced-motion:no-preference) {
+    .done .digits { animation:pop .6s ease 3; }
+    .lock-icon .shackle { transform-origin:50% 100%; animation:jiggle .5s ease 1s 1; }
+  }
+  @keyframes pop { 50% { transform:scale(1.12); } }
+  @keyframes jiggle { 25% { transform:rotate(-6deg); } 75% { transform:rotate(6deg); } }
+  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+</style>
+</head>
+<body>
+<main class="card" id="card">
+
+  <section id="s-teacher" class="hidden"></section>
+
+  <section id="s-message" class="hidden"><h1 id="msgTitle"></h1><p class="sub" id="msgBody"></p><div id="msgExtra"></div></section>
+
+  <section id="s-locked" class="hidden">
+    <svg class="lock-icon" viewBox="0 0 84 84" aria-hidden="true">
+      <path class="shackle" d="M26 38V28a16 16 0 0 1 32 0v10" fill="none" stroke="#2b2433" stroke-width="7" stroke-linecap="round"/>
+      <rect x="14" y="36" width="56" height="40" rx="9" fill="#8d8499" stroke="#2b2433" stroke-width="4"/>
+      <circle cx="42" cy="53" r="5" fill="#2b2433"/><rect x="40" y="55" width="4" height="10" rx="2" fill="#2b2433"/>
+    </svg>
+    <h1>Rewards are locked</h1>
+    <p class="sub" id="lockedSub"></p>
+  </section>
+
+  <section id="s-choose" class="hidden">
+    <div class="badge">🎉 Reward ready!</div>
+    <h1 id="chooseTitle"></h1>
+    <p class="sub">Pick your reward.</p>
+    <div class="stack" id="chooseBtns"></div>
+  </section>
+
+  <section id="s-videos" class="hidden">
+    <h1>Pick a video</h1>
+    <p class="sub" id="videosSub"></p>
+    <div class="stack" id="videoList"></div>
+    <p><button class="btn link" id="videosBack">Back</button></p>
+  </section>
+
+  <section id="s-watch" class="hidden">
+    <h1 id="watchTitle"></h1>
+    <div class="player" id="player"></div>
+    <div class="vtime" id="vtime" role="timer" aria-live="off"></div>
+    <button class="btn go" id="watchDone">I'm done watching</button>
+  </section>
+
+  <section id="s-timer" class="hidden">
+    <h1 id="timerTitle">Crafting time</h1>
+    <p class="sub" id="timerSub">Press start when you're ready to craft.</p>
+    <div class="dial" id="dial">
+      <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="bg" cx="60" cy="60" r="50"/><circle class="thread" id="ring" cx="60" cy="60" r="50"/></svg>
+      <div class="time" role="timer" aria-live="off"><div class="digits" id="digits">05:00</div><div class="state" id="state">Ready</div></div>
+    </div>
+    <button class="btn go" id="go"></button>
+    <p><button class="btn link hidden" id="timerBack">Back</button></p>
+  </section>
+
+  <section id="s-used" class="hidden">
+    <div class="badge none">Reward used</div>
+    <h1 id="usedTitle">Great job!</h1>
+    <p class="sub" id="usedSub"></p>
+  </section>
+
+  <div id="progress" class="hidden">
+    <div class="xp-line" id="xpLine"></div>
+    <div class="stitches" role="progressbar" aria-label="XP progress toward your next reward" aria-valuemin="0" aria-valuemax="100" id="bar">
+      <div class="track"></div><div class="fill" id="fill"></div><div class="needle" id="needle" aria-hidden="true">🪡</div>
+    </div>
+    <p class="hint" id="hint"></p>
+  </div>
+</main>
+
+<script type="module">
+/* =========================================================
+   TEACHER SETTINGS — edit this block, then commit the file.
+   ========================================================= */
+
+const SETTINGS = {
+  xpPerReward: 25,      // every 25 XP earns one reward
+  timerMinutes: 5,      // length of the crafting timer
+  videoMinutes: 5,      // watch time per reward — the video stops, and picks up here next reward
+  resetCode: "v1"       // change to "v2" to give everyone a fresh start on used rewards
+};
+
+// Videos students can pick from (YouTube links, or a direct .mp4 link).
+// Add as many as you like. Example:
+//   { title: "Make an origami fox", url: "https://www.youtube.com/watch?v=XXXXXXXXXXX" },
+const VIDEOS = [
+  // { title: "Video title here", url: "PASTE YOUTUBE LINK HERE" },
+];
+
+// One line per student. The student's link is  your-site-url/?s=<id>
+//   rewards: which choices that student sees — "timer", "video", or both.
+//   videos (optional): give a student their own video list instead of the shared one.
+const STUDENTS = {
+  student1: { name: "Student One",   xp: 0, rewards: ["timer", "video"] },
+  student2: { name: "Student Two",   xp: 0, rewards: ["timer", "video"] },
+  student3: { name: "Student Three", xp: 0, rewards: ["timer"] }
+  // student4: { name: "Name", xp: 0, rewards: ["video"], videos: [{ title: "…", url: "…" }] },
+};
+
+// Firebase (keeps used rewards + video spots for every device). Paste your web app config here.
+// Leave apiKey as "PASTE..." to run without Firebase (each device then remembers on its own).
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCpHdRU070G_w292b1kEwG6e_6CfHJphbA",
+  authDomain: "reward-time-e08d5.firebaseapp.com",
+  projectId: "reward-time-e08d5",
+  storageBucket: "reward-time-e08d5.firebasestorage.app",
+  messagingSenderId: "564460829271",
+  appId: "1:564460829271:web:9b70accfa829a4859dc112",
+  measurementId: "G-FJD63SSXKQ"
+};
+
+/* ========================================================= */
+
+const SET = Object.assign({}, SETTINGS);   // live copy; values saved on the teacher page replace these
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const sid = params.get("s");
+
+/* ----- storage: Firestore, with this device as a backup ----- */
+let app = null, db = null, fs = null;
+if (!FIREBASE_CONFIG.apiKey.startsWith("PASTE")) {
+  try {
+    const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    fs = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    app = appMod.initializeApp(FIREBASE_CONFIG); db = fs.getFirestore(app);
+  } catch (e) { console.warn("Firebase unavailable; using this device only.", e); }
+}
+const docId = id => id + "__" + SET.resetCode;
+const readLocal = id => { try { return JSON.parse(localStorage.getItem("rewardState:" + docId(id))) || null; } catch (e) { return null; } };
+const writeLocal = (id, v) => { try { localStorage.setItem("rewardState:" + docId(id), JSON.stringify(v)); } catch (e) {} };
+const store = {
+  state: { used: 0, videoProgress: {} }, lastPush: 0,
+  async load(id) {
+    this.state = Object.assign({ used: 0, videoProgress: {} }, readLocal(id));
+    if (db) {
+      try {
+        const snap = await fs.getDoc(fs.doc(db, "rewardState", docId(id)));
+        const d = snap.exists() ? snap.data() : {};
+        this.state = { used: d.used || 0, videoProgress: d.videoProgress || {} };
+        writeLocal(id, this.state);
+      } catch (e) { console.warn("Could not reach Firebase; using this device's copy.", e); }
+    }
+    return this.state;
+  },
+  setUsed(id, n) { this.state.used = n; writeLocal(id, this.state); this.push(id, {}); },
+  saveProg(id, key, data, force) {
+    this.state.videoProgress[key] = data; writeLocal(id, this.state);
+    if (force || Date.now() - this.lastPush > 5000) { this.lastPush = Date.now(); this.push(id, { videoProgress: { [key]: data } }); }
+  },
+  push(id, patch) {
+    if (!db) return;
+    fs.setDoc(fs.doc(db, "rewardState", docId(id)), Object.assign({ used: this.state.used, updatedAt: Date.now() }, patch), { merge: true })
+      .catch(e => console.warn("Could not save to Firebase.", e));
+  }
+};
+
+const SECTIONS = ["teacher","message","locked","choose","videos","watch","timer","used"];
+function show(name) { SECTIONS.forEach(s => $("s-" + s).classList.toggle("hidden", s !== name)); }
+
+/* ----- no student link / teacher link list ----- */
+function showMessage(title, body, extraNode) {
+  show("message"); $("msgTitle").textContent = title; $("msgBody").textContent = body;
+  if (extraNode) $("msgExtra").appendChild(extraNode);
+}
+
+/* ----- settings + student come from Firebase when it is set up ----- */
+async function loadConfig(id) {
+  let st = STUDENTS[id] || null;
+  if (db) {
+    try {
+      const [cfg, sd] = await Promise.all([fs.getDoc(fs.doc(db, "settings", "main")), fs.getDoc(fs.doc(db, "students", id))]);
+      if (cfg.exists()) { const c = cfg.data(); ["xpPerReward", "timerMinutes", "videoMinutes"].forEach(k => { if (c[k] > 0) SET[k] = c[k]; }); }
+      if (sd.exists()) { const d = sd.data(); st = { name: d.name || "Student", xp: +d.xp || 0, rewards: Array.isArray(d.rewards) && d.rewards.length ? d.rewards : ["timer"],
+                                                 videos: Array.isArray(d.videos) ? d.videos.filter(v => v && v.url) : [] }; }
+    } catch (e) { console.warn("Could not load settings from Firebase; using the file's values.", e); }
+  }
+  return st;
+}
+
+const el = (tag, props = {}, ...kids) => { const n = document.createElement(tag); Object.assign(n, props); kids.forEach(k => n.append(k)); return n; };
+const studentLink = id => location.origin + location.pathname + "?s=" + id;
+
+/* ----- teacher page (needs Firebase + a teacher login) ----- */
+async function teacherPage() {
+  show("teacher"); $("card").classList.add("wide");
+  const root = $("s-teacher"); root.replaceChildren();
+  if (!db) {
+    root.append(el("h1", { textContent: "Teacher page" }),
+      el("p", { className: "sub", textContent: "Add your Firebase config to the file to use this page. For now, here are links for the students listed in the file:" }));
+    Object.entries(STUDENTS).forEach(([id, st]) => root.append(el("p", { textContent: st.name + ": " + studentLink(id) })));
+    return;
+  }
+  const A = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+  const auth = A.getAuth(app);
+  A.onAuthStateChanged(auth, user => user ? dashboard() : login());
+
+  function login() {
+    const err = el("p", { className: "flash err" });
+    const email = el("input", { className: "in wide", type: "email", autocomplete: "username", placeholder: "Email" });
+    const pw = el("input", { className: "in wide", type: "password", autocomplete: "current-password", placeholder: "Password" });
+    const go = el("button", { className: "btn go", type: "submit", textContent: "Sign in" });
+    const form = el("form", {}, el("div", { className: "stack" }, email, pw, go), err);
+    form.onsubmit = async e => {
+      e.preventDefault(); err.textContent = "";
+      try { await A.signInWithEmailAndPassword(auth, email.value.trim(), pw.value); }
+      catch (x) { err.textContent = "Couldn't sign in. Check your email and password."; }
+    };
+    root.replaceChildren(el("h1", { textContent: "Teacher sign in" }), el("p", { className: "sub", textContent: "Only you can change XP and settings." }), form);
+  }
+
+  async function dashboard() {
+    root.replaceChildren(el("h1", { textContent: "Teacher page" }));
+    const flash = el("p", { className: "flash" });
+    const say = (m, bad) => { flash.textContent = m; flash.className = "flash" + (bad ? " err" : ""); };
+    let cfg = { xpPerReward: SET.xpPerReward, timerMinutes: SET.timerMinutes, videoMinutes: SET.videoMinutes }, studs = [];
+    try {
+      const c = await fs.getDoc(fs.doc(db, "settings", "main")); if (c.exists()) cfg = Object.assign(cfg, c.data());
+      const q = await fs.getDocs(fs.collection(db, "students")); studs = q.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) { say("Couldn't load. Check that your Firestore rules are published and your login email matches.", true); }
+
+    /* settings panel */
+    const field = (label, value) => { const i = el("input", { className: "in num", type: "number", min: 1, value }); return [el("label", { className: "field" }, label, i), i]; };
+    const [f1, xpIn] = field("XP needed for each reward", cfg.xpPerReward);
+    const [f2, tmIn] = field("Crafting timer (minutes)", cfg.timerMinutes);
+    const [f3, vdIn] = field("Video time per reward (minutes)", cfg.videoMinutes);
+    const saveCfg = el("button", { className: "btn", textContent: "Save settings" });
+    saveCfg.onclick = async () => {
+      const v = { xpPerReward: +xpIn.value, timerMinutes: +tmIn.value, videoMinutes: +vdIn.value };
+      if (!Object.values(v).every(n => n >= 1)) return say("Each number must be at least 1.", true);
+      try { await fs.setDoc(fs.doc(db, "settings", "main"), v); say("Settings saved."); } catch (e) { say("Couldn't save settings.", true); }
+    };
+    root.append(flash, el("div", { className: "panel" }, el("h2", { textContent: "Settings" }), f1, f2, f3, el("div", { className: "row-actions" }, saveCfg)));
+
+    /* students */
+    const list = el("div");
+    root.append(el("h2", { textContent: "Students" }), list);
+    const draw = () => {
+      list.replaceChildren();
+      studs.sort((a, b) => (a.name || "").localeCompare(b.name || "")).forEach(st => list.append(studentPanel(st)));
+      if (!studs.length) list.append(el("p", { className: "sub", textContent: "No students yet. Add one below." }));
+    };
+    function studentPanel(st) {
+      const name = el("input", { className: "in wide", type: "text", value: st.name || "", ariaLabel: "Student name" });
+      const xp = el("input", { className: "in num", type: "number", min: 0, value: st.xp || 0 });
+      const cT = el("input", { type: "checkbox", checked: (st.rewards || ["timer"]).includes("timer") });
+      const cV = el("input", { type: "checkbox", checked: (st.rewards || []).includes("video") });
+      const vids = el("textarea", { className: "in wide", rows: 4, placeholder: "Title | link\nTitle | link",
+        value: (st.videos || []).map(v => v.title + " | " + v.url).join("\n") });
+      const parseVids = txt => txt.split("\n").map(l => l.trim()).filter(Boolean).map((l, i) => {
+        const k = l.lastIndexOf("|");
+        return { title: k > 0 ? l.slice(0, k).trim() : "Video " + (i + 1), url: (k > 0 ? l.slice(k + 1) : l).trim() };
+      }).filter(v => v.url);
+      const save = el("button", { className: "btn", textContent: "Save" });
+      const copy = el("button", { className: "btn", textContent: "Copy link" });
+      const reset = el("button", { className: "btn", textContent: "Reset rewards" });
+      const del = el("button", { className: "btn", textContent: "Delete" });
+      save.onclick = async () => {
+        const rewards = [cT.checked && "timer", cV.checked && "video"].filter(Boolean);
+        if (!name.value.trim()) return say("Add a name first.", true);
+        if (!rewards.length) return say("Pick at least one reward type.", true);
+        const videos = parseVids(vids.value);
+        const bad = videos.find(v => !/youtu|\.mp4/i.test(v.url));
+        if (bad) return say("Couldn't read \"" + bad.title + "\". Use a YouTube link or a link ending in .mp4.", true);
+        try { await fs.setDoc(fs.doc(db, "students", st.id), { name: name.value.trim(), xp: Math.max(0, +xp.value || 0), rewards, videos }); say(name.value.trim() + " saved."); }
+        catch (e) { say("Couldn't save.", true); }
+      };
+      copy.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(studentLink(st.id)); copy.textContent = "Copied!"; setTimeout(() => copy.textContent = "Copy link", 1500); };
+      reset.onclick = async () => {
+        if (!confirm("Clear " + (name.value || "this student") + "'s used rewards and video spots?")) return;
+        try { await fs.setDoc(fs.doc(db, "rewardState", docId(st.id)), { used: 0, videoProgress: {}, updatedAt: Date.now() }); say("Rewards reset."); }
+        catch (e) { say("Couldn't reset.", true); }
+      };
+      del.onclick = async () => {
+        if (!confirm("Delete " + (name.value || "this student") + "? Their link will stop working.")) return;
+        try { await fs.deleteDoc(fs.doc(db, "students", st.id)); studs = studs.filter(x => x.id !== st.id); draw(); say("Deleted."); }
+        catch (e) { say("Couldn't delete.", true); }
+      };
+      return el("div", { className: "panel" },
+        name, el("label", { className: "field", style: "margin-top:10px" }, "XP total", xp),
+        el("div", { className: "checks" }, el("label", {}, cT, "Timer"), el("label", {}, cV, "Video")),
+        el("label", { textContent: "This student's videos (one per line, as Title | link). Leave empty to use the shared list.", style: "display:block;font-weight:500;margin:8px 0 6px" }), vids,
+        el("div", { className: "row-actions" }, save, copy, reset, del));
+    }
+    draw();
+
+    /* add student */
+    const newName = el("input", { className: "in wide", type: "text", placeholder: "New student's name" });
+    const add = el("button", { className: "btn go", textContent: "Add student" });
+    add.onclick = async () => {
+      const nm = newName.value.trim(); if (!nm) return say("Type a name first.", true);
+      const slug = nm.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 12) || "student";
+      const id = slug + "-" + Math.random().toString(36).slice(2, 6);   // hard-to-guess link
+      const data = { name: nm, xp: 0, rewards: ["timer", "video"], videos: [] };
+      try { await fs.setDoc(fs.doc(db, "students", id), data); studs.push({ id, ...data }); draw(); newName.value = ""; say(nm + " added."); }
+      catch (e) { say("Couldn't add.", true); }
+    };
+    const out = el("button", { className: "btn link", textContent: "Sign out" });
+    out.onclick = () => A.signOut(auth);
+    root.append(el("div", { className: "panel" }, el("h2", { textContent: "Add a student" }), el("div", { className: "stack" }, newName, add)), el("p", {}, out));
+  }
+}
+
+/* ----- start ----- */
+if (params.has("teacher")) {
+  await teacherPage();
+} else if (!sid) {
+  showMessage("Find your link", "Ask your teacher for your personal link.");
+} else {
+  showMessage("Loading…", "");
+  const student = await loadConfig(sid);
+  if (!student) showMessage("Find your link", "Ask your teacher for your personal link.");
+  else await run(student);
+}
+
+async function run(st) {
+  const XP = SET.xpPerReward, MIN = SET.timerMinutes;
+  const videos = (st.videos && st.videos.length ? st.videos : VIDEOS).filter(v => parseVideo(v.url));
+  const rewards = st.rewards.filter(r => r === "timer" || (r === "video" && videos.length));
+  if (!rewards.length) rewards.push("timer");
+  document.title = st.name + " · Reward time";
+
+  const earned = Math.floor(st.xp / XP);
+  const toNext = XP - (st.xp % XP);
+  const pct = ((st.xp % XP) / XP) * 100;
+
+  // used rewards live in Firebase; only the latest reward is ever ready
+  const remote = await store.load(sid);
+  let used = Math.max(Math.min(remote.used, earned), earned - 1);
+  if (used !== remote.used) store.setUsed(sid, used);
+  const consume = () => { used += 1; store.setUsed(sid, used); };
+
+  function paintProgress() {
+    $("progress").classList.remove("hidden");
+    $("xpLine").textContent = st.xp + " XP total";
+    $("hint").textContent = toNext + " more XP for your next reward.";
+    $("bar").setAttribute("aria-valuenow", Math.round(pct));
+    $("fill").style.width = "0%";
+    requestAnimationFrame(() => { $("fill").style.width = pct + "%"; $("needle").style.left = pct + "%"; });
+  }
+
+  function showUsed(msg) {
+    show("used");
+    $("usedTitle").textContent = earned ? "Great job, " + st.name + "!" : "";
+    $("usedSub").textContent = msg || "Earn " + toNext + " more XP to unlock your next reward.";
+    paintProgress();
+  }
+  function openChoose() {
+    $("progress").classList.add("hidden");
+    if (rewards.length === 1) return rewards[0] === "timer" ? openTimer(false) : openVideos(false);
+    show("choose");
+    $("chooseTitle").textContent = st.name + ", you earned a reward!";
+    const b = $("chooseBtns"); b.innerHTML = "";
+    if (rewards.includes("timer")) b.appendChild(pickBtn("timer", "⏱️", "Crafting timer", MIN + " minutes", () => openTimer(true)));
+    if (rewards.includes("video")) b.appendChild(pickBtn("video", "🎬", "Watch a video", "Pick one from the list", () => openVideos(true)));
+  }
+  function pickBtn(cls, ico, title, small, fn) {
+    const el = document.createElement("button"); el.className = "btn pick " + cls;
+    el.innerHTML = '<span class="ico"></span><span><span class="t"></span><small></small></span>';
+    el.querySelector(".ico").textContent = ico; el.querySelector(".t").textContent = title; el.querySelector("small").textContent = small;
+    el.onclick = fn; return el;
+  }
+
+  /* ----- videos ----- */
+  function openVideos(canGoBack) {
+    show("videos");
+    $("videosSub").textContent = "You get " + SET.videoMinutes + " minutes. Your spot is saved for next time.";
+    const list = $("videoList"); list.innerHTML = "";
+    const progAll = getProg();
+    videos.forEach(v => {
+      const pr = progAll[vkey(v.url)] || {};
+      const b = document.createElement("button"); b.className = "vcard";
+      let label = "▶  " + v.title;
+      if (pr.done) label = "✓  " + v.title + " (watched)";
+      else if (pr.pos > 5) label = "▶  " + v.title + " — continue at " + mmss(pr.pos);
+      b.textContent = label;
+      b.onclick = () => playVideo(v); list.appendChild(b);
+    });
+    $("videosBack").classList.toggle("hidden", !canGoBack);
+    $("videosBack").onclick = openChoose;
+  }
+  function parseVideo(url) {
+    if (!url) return null;
+    if (/\.mp4(\?.*)?$/i.test(url)) return { type: "file", src: url };
+    const m = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+    return m ? { type: "yt", id: m[1] } : null;
+  }
+  const mmss = sec => { sec = Math.floor(sec); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); };
+  const vkey = url => {
+    const m = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+    return m ? "yt_" + m[1] : "f_" + url.replace(/[^\w-]/g, "_").slice(-100);
+  };
+  const getProg = () => store.state.videoProgress;
+  const saveProg = (url, data, force) => store.saveProg(sid, vkey(url), data, force);
+  let ytPromise = null;
+  function loadYT() {
+    if (ytPromise) return ytPromise;
+    ytPromise = new Promise(res => {
+      if (window.YT && YT.Player) return res();
+      window.onYouTubeIframeAPIReady = res;
+      const sc = document.createElement("script"); sc.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(sc);
+    });
+    return ytPromise;
+  }
+
+  async function playVideo(v) {
+    consume();
+    const info = parseVideo(v.url), box = $("player");
+    const saved = getProg()[vkey(v.url)] || {};
+    const startAt = saved.done ? 0 : (saved.pos || 0);
+    let budget = SET.videoMinutes * 60, last = Date.now(), loop = null, adapter = null;
+    let ended = false, over = false, lastPos = startAt;
+
+    box.innerHTML = ""; box.classList.remove("hidden");
+    $("watchTitle").textContent = v.title;
+    $("watchDone").textContent = "I'm done watching";
+    $("vtime").textContent = "Video time left: " + mmss(budget);
+    show("watch");
+
+    function cleanup() {
+      over = true; clearInterval(loop);
+      if (!ended && !(saved.done && lastPos === startAt)) saveProg(v.url, { pos: lastPos, done: false }, true);
+      try { adapter && adapter.pause(); adapter && adapter.destroy(); } catch (e) {}
+      box.innerHTML = "";
+    }
+    function endWith(msg) {
+      cleanup();
+      box.classList.add("hidden");
+      $("vtime").textContent = msg;
+      $("watchDone").textContent = "All done";
+    }
+    $("watchDone").onclick = () => {
+      if (!over) cleanup();
+      showUsed("Earn " + toNext + " more XP to keep watching!");
+    };
+
+    const mount = document.createElement("div"); box.appendChild(mount);
+    if (info.type === "yt") {
+      await loadYT();
+      adapter = await new Promise(res => {
+        const p = new YT.Player(mount, {
+          videoId: info.id,
+          playerVars: { start: Math.floor(startAt), rel: 0, modestbranding: 1, playsinline: 1 },
+          events: {
+            onReady: () => res({ time: () => p.getCurrentTime(), playing: () => p.getPlayerState() === 1,
+                                 pause: () => p.pauseVideo(), destroy: () => p.destroy() }),
+            onStateChange: e => { if (e.data === 0) ended = true; }
+          }
+        });
+      });
+    } else {
+      const el = document.createElement("video");
+      el.src = info.src; el.controls = true; el.playsInline = true; box.replaceChildren(el);
+      el.addEventListener("loadedmetadata", () => { if (startAt) el.currentTime = startAt; });
+      el.addEventListener("ended", () => { ended = true; });
+      adapter = { time: () => el.currentTime, playing: () => !el.paused && !el.ended,
+                  pause: () => el.pause(), destroy: () => { el.removeAttribute("src"); el.load(); } };
+    }
+    if (over) return;   // she tapped "done" while the player was loading
+
+    last = Date.now();
+    loop = setInterval(() => {
+      if (over) return;
+      const now = Date.now(), dt = Math.min((now - last) / 1000, 1.5); last = now;
+      if (ended) {
+        saveProg(v.url, { pos: 0, done: true }, true);
+        return endWith("You finished the video! Earn " + toNext + " more XP for your next reward.");
+      }
+      let playing = false;
+      try { playing = adapter.playing(); if (playing) lastPos = adapter.time(); } catch (e) {}
+      if (!playing) return;
+      budget -= dt;
+      saveProg(v.url, { pos: lastPos, done: false });
+      $("vtime").textContent = "Video time left: " + mmss(Math.max(0, budget));
+      if (budget <= 0) {
+        endWith("Your spot is saved. Earn " + toNext + " more XP to keep watching!");
+      }
+    }, 500);
+  }
+
+  /* ----- timer ----- */
+  function openTimer(canGoBack) {
+    show("timer");
+    const R = 50, C = 2 * Math.PI * R, ring = $("ring"); ring.style.strokeDasharray = C;
+    const total = MIN * 60; let remaining = total, endAt = null, tick = null, running = false, started = false, finished = false;
+    const fmt = s => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+    const draw = () => {
+      ring.style.strokeDashoffset = C * (1 - remaining / total);
+      $("digits").textContent = fmt(Math.ceil(remaining));
+      document.title = running ? fmt(Math.ceil(remaining)) + " · Crafting time" : st.name + " · Reward time";
+    };
+    $("dial").classList.remove("done"); $("state").textContent = "Ready";
+    $("timerSub").textContent = "Press start when you're ready to craft.";
+    $("go").textContent = "Start " + MIN + " minutes";
+    $("timerBack").classList.toggle("hidden", !canGoBack);
+    $("timerBack").onclick = openChoose;
+    draw();
+
+    const stop = () => { running = false; clearInterval(tick); };
+    function finish() {
+      stop(); remaining = 0; finished = true; draw();
+      $("dial").classList.add("done"); $("state").textContent = "Time's up! Clean up.";
+      $("go").textContent = "All done"; chime();
+    }
+    $("go").onclick = () => {
+      if (finished) { showUsed("Great crafting! Earn " + toNext + " more XP to unlock your next reward."); return; }
+      if (running) { // pause
+        remaining = Math.max(0, (endAt - Date.now()) / 1000); stop();
+        $("state").textContent = "Paused"; $("go").textContent = "Resume"; draw(); return;
+      }
+      if (!started) { consume(); started = true; $("timerBack").classList.add("hidden"); $("timerSub").textContent = ""; }
+      running = true; endAt = Date.now() + remaining * 1000;
+      $("state").textContent = "Crafting…"; $("go").textContent = "Pause";
+      tick = setInterval(() => { remaining = Math.max(0, (endAt - Date.now()) / 1000); draw(); if (remaining <= 0) finish(); }, 200);
+    };
+  }
+  function chime() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [660, 880, 1100].forEach((f, i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "sine"; o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
+        const t = ctx.currentTime + i * 0.35;
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+        o.start(t); o.stop(t + 0.34);
+      });
+    } catch (e) {}
+  }
+
+  /* ----- start ----- */
+  if (earned === 0) {
+    show("locked");
+    $("lockedSub").textContent = st.name + ", earn " + XP + " XP to unlock a reward.";
+    paintProgress();
+  } else if (earned - used > 0) {
+    openChoose();
+  } else {
+    showUsed();
+  }
+}
+</script>
+</body>
+</html>
