@@ -329,9 +329,14 @@ async function teacherPage() {
     saveCfg.onclick = async () => {
       const v = { xpPerReward: +xpIn.value, timerMinutes: +tmIn.value, videoMinutes: +vdIn.value };
       if (!Object.values(v).every(n => n >= 1)) return say("Each number must be at least 1.", true);
-      try { await fs.setDoc(fs.doc(db, "settings", "main"), v); say("Settings saved."); } catch (e) { say("Couldn't save settings.", true); }
+      try { await fs.setDoc(fs.doc(db, "settings", "main"), v); Object.assign(cfg, v); say("Settings saved."); } catch (e) { say("Couldn't save settings.", true); }
     };
     root.append(flash, el("div", { className: "panel" }, el("h2", { textContent: "Settings" }), f1, f2, f3, el("div", { className: "row-actions" }, saveCfg)));
+
+    const refreshStuds = async () => {
+      const q = await fs.getDocs(fs.collection(db, "students"));
+      studs = q.docs.map(d => ({ id: d.id, ...d.data() }));
+    };
 
     /* daily XP: send many updates at once, or start a new day */
     const bulkMode = el("select", { className: "in wide", ariaLabel: "How to apply the numbers" },
@@ -360,7 +365,7 @@ async function teacherPage() {
       });
       if (!jobs.length) return say("No matching student names found. Paste the name, then a comma or tab, then the XP.", true);
       try {
-        await Promise.all(jobs); draw();
+        await Promise.all(jobs); await refreshStuds(); draw();
         say("Sent XP for " + jobs.length + (jobs.length === 1 ? " student." : " students.") + (missing.length ? " Not found: " + missing.join(", ") + "." : ""), missing.length > 0);
       } catch (e) { say("Couldn't send the updates. Check your connection and try again.", true); }
     };
@@ -372,7 +377,7 @@ async function teacherPage() {
           fs.setDoc(fs.doc(db, "students", st.id), { xp: 0 }, { merge: true }),
           fs.setDoc(fs.doc(db, "rewardState", docId(st.id)), { used: 0, updatedAt: Date.now() }, { merge: true })
         ]));
-        studs.forEach(st => { st.xp = 0; }); draw(); say("New day started. Everyone is at 0 XP.");
+        await refreshStuds(); draw(); say("New day started. Everyone is at 0 XP. Videos and goal numbers were not changed.");
       } catch (e) { say("Couldn't start the new day.", true); }
     };
     root.append(el("div", { className: "panel" }, el("h2", { textContent: "Daily XP" }),
@@ -421,7 +426,13 @@ async function teacherPage() {
         const videos = parseVids(vids.value);
         const bad = videos.find(v => !/youtu|\.mp4|^https:\/\//i.test(v.url));
         if (bad) return tell("Couldn't read \"" + bad.title + "\". Use a link starting with https:// or one ending in .mp4.", true);
-        try { await fs.setDoc(fs.doc(db, "students", st.id), { name: name.value.trim(), xp: Math.max(0, +xp.value || 0), rewards, videos, ...(+need.value > 0 ? { xpPerReward: Math.floor(+need.value) } : {}), ...(+vmin.value > 0 ? { videoMinutes: +vmin.value } : {}) }); tell(name.value.trim() + " saved."); }
+        const data = { name: name.value.trim(), xp: Math.max(0, +xp.value || 0), rewards, videos,
+          ...(+need.value > 0 ? { xpPerReward: Math.floor(+need.value) } : {}), ...(+vmin.value > 0 ? { videoMinutes: +vmin.value } : {}) };
+        try {
+          await fs.setDoc(fs.doc(db, "students", st.id), data);
+          Object.assign(st, { xpPerReward: 0, videoMinutes: 0 }, data);   // keep this page's copy matching what's saved
+          tell(data.name + " saved.");
+        }
         catch (e) { tell("Couldn't save.", true); }
       };
       copy.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(studentLink(st.id)); copy.textContent = "Copied!"; setTimeout(() => copy.textContent = "Copy link", 1500); };
